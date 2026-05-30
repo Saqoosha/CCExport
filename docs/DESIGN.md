@@ -14,8 +14,8 @@ single, self-contained HTML file, then opens it in the default browser.
 ## Data source (verified against real sessions)
 
 - Sessions live at `~/.claude/projects/<encoded-cwd>/<uuid>.jsonl`.
-  Directory names encode the cwd, e.g. `-Users-hiko-Documents-repos-Personal-CCExport`
-  → `/Users/hiko/Documents/repos/Personal/CCExport`.
+  Directory names encode the cwd, e.g. `-Users-me-Documents-repos-Personal-CCExport`
+  → `/Users/me/Documents/repos/Personal/CCExport`.
 - Each line is a JSON object. Relevant `type` values:
   `user`, `assistant`, `system`, `queue-operation`, `progress`,
   `file-history-snapshot`, `attachment`, `last-prompt`.
