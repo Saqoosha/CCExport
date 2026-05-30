@@ -21,23 +21,19 @@ public enum HTMLRenderer {
         var lastRole: String? = nil
 
         for entry in session.entries {
-            if entry.type == "compact-summary" {
-                body += compactSummaryBlock(entry)
-                lastRole = "meta"
-                continue
-            }
-            if entry.type == "notification" {
-                if case .text(let summary) = entry.blocks.first {
-                    body += "<div class=\"note\">\(HTMLEscaping.escape(summary))</div>\n"
-                }
-                continue
-            }
+            // Meta (skill/system-injected) user & assistant messages render folded.
             if entry.isMeta {
                 let block = metaBlock(entry)
                 if !block.isEmpty { body += block; lastRole = "meta" }
                 continue
             }
-            if entry.type == "assistant" {
+            switch entry.kind {
+            case .compactSummary:
+                body += compactSummaryBlock(entry)
+                lastRole = "meta"
+            case .notification(let summary):
+                body += "<div class=\"note\">\(HTMLEscaping.escape(summary))</div>\n"
+            case .assistant:
                 let inner = assistantBody(entry, results: resultsByID, embedded: embedded)
                 guard !inner.isEmpty else { continue }
                 if lastRole == "claude" {
@@ -48,7 +44,7 @@ public enum HTMLRenderer {
                                  time: entry.timestamp, inner: inner)
                 }
                 lastRole = "claude"
-            } else {
+            case .user:
                 let parts = userBody(entry, embedded: embedded)
                 if !parts.human.isEmpty {
                     body += turn(role: "you", name: "You", icon: Assets.userIconSVG,
@@ -69,7 +65,8 @@ public enum HTMLRenderer {
     /// embed their result, so the same result must not also render standalone.
     private static func collectToolUseIDs(_ entries: [SessionEntry]) -> Set<String> {
         var ids = Set<String>()
-        for entry in entries where entry.type == "assistant" {
+        for entry in entries {
+            guard case .assistant = entry.kind else { continue }
             for case .toolUse(let tool) in entry.blocks { ids.insert(tool.id) }
         }
         return ids
@@ -277,8 +274,16 @@ public enum HTMLRenderer {
         return out
     }
 
+    private static let allowedImageTypes: Set<String> =
+        ["image/png", "image/jpeg", "image/gif", "image/webp"]
+
     private static func imageTag(_ img: Base64Image) -> String {
-        "<img class=\"inline-image\" src=\"data:\(img.mediaType);base64,\(img.data)\" alt=\"\">\n"
+        // Allowlist the media type (SVG and arbitrary types are script vectors)
+        // and escape both fields so a crafted session can't break out of the URI.
+        guard allowedImageTypes.contains(img.mediaType.lowercased()) else { return "" }
+        let media = HTMLEscaping.escapeAttribute(img.mediaType)
+        let data = HTMLEscaping.escapeAttribute(img.data)
+        return "<img class=\"inline-image\" src=\"data:\(media);base64,\(data)\" alt=\"\">\n"
     }
 
     // MARK: - Document shell
@@ -302,6 +307,7 @@ public enum HTMLRenderer {
         <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: https:; font-src data:;">
         <title>\(HTMLEscaping.escape(title))</title>
         <style>
         \(Assets.css)
@@ -323,7 +329,8 @@ public enum HTMLRenderer {
     // MARK: - Helpers
 
     private static func sessionTitle(_ session: ParsedSession) -> String {
-        for entry in session.entries where entry.type == "user" {
+        for entry in session.entries {
+            guard case .user = entry.kind, !entry.isMeta else { continue }
             for case .text(let t) in entry.blocks {
                 let line = t.split(separator: "\n", maxSplits: 1).first.map(String.init) ?? t
                 let trimmed = line.trimmingCharacters(in: .whitespaces)

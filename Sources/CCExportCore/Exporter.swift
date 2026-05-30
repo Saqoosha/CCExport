@@ -26,11 +26,20 @@ public enum Exporter {
         return outURL
     }
 
-    /// Open a file in the default browser via `/usr/bin/open`.
-    public static func openInBrowser(_ url: URL) {
+    /// Open a file in the default browser via `/usr/bin/open`. Returns whether the
+    /// open command launched, so callers can report a failure instead of claiming
+    /// success when nothing opened.
+    @discardableResult
+    public static func openInBrowser(_ url: URL) -> Bool {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
         process.arguments = [url.path]
-        try? process.run()
+        do {
+            try process.run()
+            return true
+        } catch {
+            FileHandle.standardError.write(Data("warning: couldn't open \(url.path): \(error)\n".utf8))
+            return false
+        }
     }
 }

@@ -87,8 +87,11 @@ enum JSONUtil {
     static func scalarString(_ value: Any?) -> String? {
         switch value {
         case let s as String: return s
+        // JSONSerialization tags booleans as NSNumber, so match CFBoolean first —
+        // otherwise `n.stringValue` renders them as "1"/"0".
+        case let n as NSNumber where CFGetTypeID(n) == CFBooleanGetTypeID():
+            return n.boolValue ? "true" : "false"
         case let n as NSNumber: return n.stringValue
-        case let b as Bool: return b ? "true" : "false"
         default: return nil
         }
     }

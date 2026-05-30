@@ -19,6 +19,21 @@ enum HTMLEscaping {
     static func escapeAttribute(_ string: String) -> String {
         escape(string).replacingOccurrences(of: "\"", with: "&quot;")
     }
+
+    /// Neutralize dangerous URL schemes (`javascript:`, `data:text/html`, …) in
+    /// markdown link/image destinations. Allows http(s), mailto, fragments,
+    /// relative paths, and data:image. Anything else collapses to `#`.
+    static func safeURL(_ url: String) -> String {
+        let lower = url.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let allowed = ["http://", "https://", "mailto:", "tel:", "#", "/", "./", "../", "data:image/"]
+        if allowed.contains(where: lower.hasPrefix) { return url }
+        // A scheme-less relative reference (no ":" before the first "/") is safe.
+        if let colon = lower.firstIndex(of: ":") {
+            if let slash = lower.firstIndex(of: "/"), slash < colon { return url }
+            return "#"
+        }
+        return url
+    }
 }
 
 /// Renders CommonMark/GFM markdown to HTML.
@@ -77,8 +92,14 @@ private struct HTMLMarkupVisitor: MarkupVisitor {
         return "<pre><code\(cls)>\(HTMLEscaping.escape(codeBlock.code))</code></pre>\n"
     }
 
-    mutating func visitHTMLBlock(_ html: HTMLBlock) -> String { html.rawHTML }
-    mutating func visitInlineHTML(_ inlineHTML: InlineHTML) -> String { inlineHTML.rawHTML }
+    // Raw HTML in markdown is escaped, not passed through — a `<script>` in any
+    // message/tool text must never become executable in the exported document.
+    mutating func visitHTMLBlock(_ html: HTMLBlock) -> String {
+        "<pre><code>\(HTMLEscaping.escape(html.rawHTML))</code></pre>\n"
+    }
+    mutating func visitInlineHTML(_ inlineHTML: InlineHTML) -> String {
+        HTMLEscaping.escape(inlineHTML.rawHTML)
+    }
     mutating func visitLineBreak(_ lineBreak: LineBreak) -> String { "<br>\n" }
     mutating func visitSoftBreak(_ softBreak: SoftBreak) -> String { "\n" }
     mutating func visitThematicBreak(_ thematicBreak: ThematicBreak) -> String { "<hr>\n" }
@@ -89,12 +110,12 @@ private struct HTMLMarkupVisitor: MarkupVisitor {
     }
 
     mutating func visitLink(_ link: Link) -> String {
-        let dest = HTMLEscaping.escapeAttribute(link.destination ?? "")
-        return "<a href=\"\(dest)\">\(renderChildren(of: link))</a>"
+        let dest = HTMLEscaping.escapeAttribute(HTMLEscaping.safeURL(link.destination ?? ""))
+        return "<a href=\"\(dest)\" rel=\"noopener noreferrer\">\(renderChildren(of: link))</a>"
     }
 
     mutating func visitImage(_ image: Image) -> String {
-        let src = HTMLEscaping.escapeAttribute(image.source ?? "")
+        let src = HTMLEscaping.escapeAttribute(HTMLEscaping.safeURL(image.source ?? ""))
         return "<img src=\"\(src)\" alt=\"\">"
     }
 

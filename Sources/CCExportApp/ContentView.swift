@@ -30,7 +30,7 @@ struct ContentView: View {
             if store.isLoading {
                 ProgressView().controlSize(.small)
             } else if store.filteredSessions.isEmpty {
-                ContentUnavailableView("No sessions", systemImage: "tray")
+                ContentUnavailableView(emptyTitle, systemImage: "tray", description: Text(emptyMessage))
             }
         }
         .navigationTitle("Sessions")
@@ -40,6 +40,26 @@ struct ContentView: View {
                     .help("Rescan ~/.claude/projects")
             }
         }
+    }
+
+    private var isSearching: Bool {
+        !store.search.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    private var projectsDirectoryExists: Bool {
+        FileManager.default.fileExists(atPath: SessionScanner.projectsDirectory.path)
+    }
+
+    private var emptyTitle: String {
+        if isSearching { return "No matches" }
+        return projectsDirectoryExists ? "No sessions" : "No projects folder"
+    }
+
+    private var emptyMessage: String {
+        if isSearching { return "No sessions match your search." }
+        return projectsDirectoryExists
+            ? "No Claude Code sessions found in ~/.claude/projects."
+            : "~/.claude/projects wasn't found."
     }
 }
 

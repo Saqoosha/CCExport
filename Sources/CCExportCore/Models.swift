@@ -55,23 +55,32 @@ public enum ContentBlock: Sendable {
     case image(Base64Image)
 }
 
+/// The kind of a renderable entry. A closed set — the raw JSONL `queue-operation`
+/// is converted to `.user`/`.notification` at parse time and never reaches here.
+public enum EntryKind: Sendable {
+    case user
+    case assistant
+    /// A system note (background-task completion, interrupt marker) shown as a
+    /// slim line; carries its own one-line summary.
+    case notification(summary: String)
+    /// A context-compaction summary injected by Claude Code; text is in `blocks`.
+    case compactSummary
+}
+
 /// One JSONL line that carries renderable conversation content.
 public struct SessionEntry: Sendable {
-    /// Raw `type`: "user", "assistant", "queue-operation", ...
-    public let type: String
-    /// `message.role` when present.
-    public let role: String?
+    public let kind: EntryKind
     public let timestamp: Date?
     public let blocks: [ContentBlock]
     public let cwd: String?
     /// `isMeta` on the JSONL line: system/skill-injected content delivered as a
-    /// user message (not human-typed). Rendered folded.
+    /// user/assistant message (not human-typed). Rendered folded. Only meaningful
+    /// for `.user`/`.assistant`.
     public let isMeta: Bool
 
-    public init(type: String, role: String?, timestamp: Date?, blocks: [ContentBlock],
+    public init(kind: EntryKind, timestamp: Date?, blocks: [ContentBlock],
                 cwd: String?, isMeta: Bool = false) {
-        self.type = type
-        self.role = role
+        self.kind = kind
         self.timestamp = timestamp
         self.blocks = blocks
         self.cwd = cwd

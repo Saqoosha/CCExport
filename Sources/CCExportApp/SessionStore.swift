@@ -12,7 +12,7 @@ final class SessionStore {
     var status: Status?
 
     enum Status {
-        case success(String, URL)
+        case success(name: String, url: URL, opened: Bool)
         case failure(String)
     }
 
@@ -57,8 +57,8 @@ final class SessionStore {
 
             switch result {
             case .success(let url):
-                Exporter.openInBrowser(url)
-                status = .success(url.lastPathComponent, url)
+                let opened = Exporter.openInBrowser(url)
+                status = .success(name: url.lastPathComponent, url: url, opened: opened)
             case .failure(let error):
                 status = .failure(error.localizedDescription)
             }

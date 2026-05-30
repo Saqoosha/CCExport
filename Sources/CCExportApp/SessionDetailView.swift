@@ -1,11 +1,18 @@
 import SwiftUI
+import AppKit
 import CCExportCore
 
 private let previewLineCount = 500
 
 struct SessionDetailView: View {
     @Bindable var store: SessionStore
-    @State private var previewHTML: String?
+    @State private var previewState: PreviewState = .loading
+
+    private enum PreviewState {
+        case loading
+        case ready(String)
+        case failed
+    }
 
     var body: some View {
         if let summary = store.selectedSummary {
@@ -54,10 +61,10 @@ struct SessionDetailView: View {
     @ViewBuilder
     private var statusBar: some View {
         switch store.status {
-        case .success(let name, let url):
+        case .success(let name, let url, let opened):
             statusLine {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                Text("Exported \(name)")
+                Text(opened ? "Exported \(name)" : "Exported \(name) — couldn't open the browser")
                 Button("Show in Finder") { revealInFinder(url) }.buttonStyle(.link)
             }
         case .failure(let message):
@@ -81,9 +88,15 @@ struct SessionDetailView: View {
 
     @ViewBuilder
     private var preview: some View {
-        if let html = previewHTML {
+        switch previewState {
+        case .ready(let html):
             HTMLPreview(html: html)
-        } else {
+        case .failed:
+            ContentUnavailableView("Couldn't render preview",
+                                   systemImage: "exclamationmark.triangle",
+                                   description: Text("This session file couldn't be read or parsed."))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .loading:
             VStack(spacing: 8) {
                 ProgressView().controlSize(.small)
                 Text("Rendering preview…").font(.caption).foregroundStyle(.secondary)
@@ -93,12 +106,12 @@ struct SessionDetailView: View {
     }
 
     private func loadPreview(_ summary: SessionSummary) async {
-        previewHTML = nil
+        previewState = .loading
         let url = summary.fileURL
         let html = await Task.detached(priority: .userInitiated) {
             HTMLRenderer.previewHTML(fileURL: url, maxLines: previewLineCount)
         }.value
-        previewHTML = html
+        previewState = html.map(PreviewState.ready) ?? .failed
     }
 
     // MARK: - Helpers
@@ -109,9 +122,6 @@ struct SessionDetailView: View {
     }
 
     private func revealInFinder(_ url: URL) {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        process.arguments = ["-R", url.path]
-        try? process.run()
+        NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 }

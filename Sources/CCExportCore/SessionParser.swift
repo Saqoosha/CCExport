@@ -64,13 +64,12 @@ public enum SessionParser {
             // Drop the enqueue copy if the same message is delivered as a user entry.
             if deliveredTexts.contains(raw.trimmingCharacters(in: .whitespacesAndNewlines)) { return nil }
             if let summary = notificationSummary(from: raw) {
-                return SessionEntry(type: "notification", role: nil, timestamp: timestamp,
-                                    blocks: [.text(summary)], cwd: cwd)
+                return SessionEntry(kind: .notification(summary: summary), timestamp: timestamp,
+                                    blocks: [], cwd: cwd)
             }
             let text = TextCleaning.clean(raw)
             guard !text.isEmpty else { return nil }
-            return SessionEntry(type: "user", role: "user", timestamp: timestamp,
-                                blocks: [.text(text)], cwd: cwd)
+            return SessionEntry(kind: .user, timestamp: timestamp, blocks: [.text(text)], cwd: cwd)
         }
 
         guard type == "user" || type == "assistant",
@@ -80,22 +79,20 @@ public enum SessionParser {
         if type == "user", isCompactSummary {
             let blocks = parseContent(message["content"])
             guard !blocks.isEmpty else { return nil }
-            return SessionEntry(type: "compact-summary", role: nil, timestamp: timestamp,
-                                blocks: blocks, cwd: cwd)
+            return SessionEntry(kind: .compactSummary, timestamp: timestamp, blocks: blocks, cwd: cwd)
         }
 
         // System notices delivered as user messages (background-task completions,
         // interrupt markers) — rendered as slim notes, not as "You" turns.
         if type == "user", let raw = rawUserText(obj), let note = systemNoteText(from: raw) {
-            return SessionEntry(type: "notification", role: nil, timestamp: timestamp,
-                                blocks: [.text(note)], cwd: cwd)
+            return SessionEntry(kind: .notification(summary: note), timestamp: timestamp,
+                                blocks: [], cwd: cwd)
         }
 
-        let role = message["role"] as? String
         let blocks = parseContent(message["content"])
         guard !blocks.isEmpty else { return nil }
-        return SessionEntry(type: type, role: role, timestamp: timestamp, blocks: blocks,
-                            cwd: cwd, isMeta: isMeta)
+        return SessionEntry(kind: type == "assistant" ? .assistant : .user, timestamp: timestamp,
+                            blocks: blocks, cwd: cwd, isMeta: isMeta)
     }
 
     /// Concatenated raw text of a user message (string content or text blocks).

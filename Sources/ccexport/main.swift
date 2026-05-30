@@ -48,7 +48,10 @@ func runExport(_ args: [String]) {
         switch args[i] {
         case "-o", "--output":
             i += 1
-            guard i < args.count else { break }
+            guard i < args.count else {
+                FileHandle.standardError.write(Data("error: \(args[i - 1]) requires a path\n".utf8))
+                exit(2)
+            }
             output = URL(fileURLWithPath: (args[i] as NSString).expandingTildeInPath)
         case "--no-open": open = false
         case "--stdout": toStdout = true
@@ -71,7 +74,9 @@ func runExport(_ args: [String]) {
         let out = try Exporter.export(session: session, to: output)
         let size = (try? out.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
         print("Exported \(session.entries.count) entries → \(out.path) (\(size / 1024) KB)")
-        if open { Exporter.openInBrowser(out) }
+        if open, !Exporter.openInBrowser(out) {
+            FileHandle.standardError.write(Data("warning: exported, but couldn't open the browser\n".utf8))
+        }
     } catch {
         FileHandle.standardError.write(Data("error: \(error)\n".utf8))
         exit(1)
