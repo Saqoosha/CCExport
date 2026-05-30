@@ -12,6 +12,8 @@ packages:
 settings:
   base:
     SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
 
 targets:
   CCExport:
@@ -34,5 +36,7 @@ targets:
       path: Sources/CCExportApp/Info.plist
       properties:
         CFBundleDisplayName: CCExport
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         LSApplicationCategoryType: public.app-category.developer-tools
         LSMinimumSystemVersion: "14.0"
