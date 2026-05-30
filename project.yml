@@ -1,0 +1,36 @@
+name: CCExport
+options:
+  bundleIdPrefix: sh.saqoo
+  deploymentTarget:
+    macOS: "14.0"
+  minimumXcodeGenVersion: "2.42.0"
+
+packages:
+  CCExportCore:
+    path: .
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+
+targets:
+  CCExport:
+    type: application
+    platform: macOS
+    sources:
+      - Sources/CCExportApp
+    dependencies:
+      - package: CCExportCore
+        product: CCExportCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: sh.saqoo.ccexport
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        ENABLE_HARDENED_RUNTIME: "NO"
+    info:
+      path: Sources/CCExportApp/Info.plist
+      properties:
+        CFBundleDisplayName: CCExport
+        LSApplicationCategoryType: public.app-category.developer-tools
+        LSMinimumSystemVersion: "14.0"
