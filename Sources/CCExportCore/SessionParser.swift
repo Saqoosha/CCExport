@@ -2,16 +2,21 @@ import Foundation
 
 public enum SessionParser {
     /// Parse one session JSONL file into a `ParsedSession`.
-    public static func parse(fileURL: URL) throws -> ParsedSession {
+    /// Parse a session JSONL file. `maxLines` caps how many leading lines are read
+    /// (used for the live preview); nil reads the whole file.
+    public static func parse(fileURL: URL, maxLines: Int? = nil) throws -> ParsedSession {
         let content = try String(contentsOf: fileURL, encoding: .utf8)
         var objects: [[String: Any]] = []
-        content.enumerateLines { line, _ in
+        var lineCount = 0
+        content.enumerateLines { line, stop in
+            lineCount += 1
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty,
-                  let data = trimmed.data(using: .utf8),
-                  let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-            else { return }
-            objects.append(obj)
+            if !trimmed.isEmpty,
+               let data = trimmed.data(using: .utf8),
+               let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
+                objects.append(obj)
+            }
+            if let maxLines, lineCount >= maxLines { stop = true }
         }
 
         // Pre-scan: text of every delivered user message. A queued message

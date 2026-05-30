@@ -1,13 +1,22 @@
 import SwiftUI
 import CCExportCore
 
+private let previewLineCount = 500
+
 struct SessionDetailView: View {
     @Bindable var store: SessionStore
+    @State private var previewHTML: String?
 
     var body: some View {
         if let summary = store.selectedSummary {
-            detail(summary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            VStack(spacing: 0) {
+                header(summary)
+                statusBar
+                Divider()
+                preview
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .task(id: summary.id) { await loadPreview(summary) }
         } else {
             ContentUnavailableView("Select a session",
                                    systemImage: "doc.text",
@@ -16,67 +25,83 @@ struct SessionDetailView: View {
         }
     }
 
-    private func detail(_ summary: SessionSummary) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(summary.title).font(.title3).fontWeight(.semibold)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(projectLabel(summary.projectPath))
-                    .font(.callout).foregroundStyle(.secondary)
-                    .lineLimit(1).truncationMode(.middle)
-            }
+    // MARK: - Header
 
-            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
-                metaRow("Session", String(summary.sessionID.prefix(8)))
-                metaRow("Modified", summary.modified.formatted(date: .complete, time: .shortened))
-                metaRow("File", summary.fileURL.path)
+    private func header(_ summary: SessionSummary) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(summary.title).font(.headline).lineLimit(2)
+                HStack(spacing: 6) {
+                    Text(projectLabel(summary.projectPath))
+                        .lineLimit(1).truncationMode(.middle)
+                    Text("· preview: first \(previewLineCount) lines")
+                        .foregroundStyle(.tertiary)
+                }
+                .font(.caption).foregroundStyle(.secondary)
             }
-            .font(.system(size: 12))
-
-            Button {
-                store.export(summary)
-            } label: {
+            Spacer(minLength: 0)
+            Button { store.export(summary) } label: {
                 Label("Export & Open", systemImage: "square.and.arrow.up")
-                    .frame(maxWidth: .infinity)
             }
-            .controlSize(.large)
             .buttonStyle(.borderedProminent)
+            .controlSize(.large)
             .keyboardShortcut(.return, modifiers: .command)
-
-            statusView
-            }
-            .padding(28)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize()
         }
+        .padding(12)
     }
 
     @ViewBuilder
-    private var statusView: some View {
+    private var statusBar: some View {
         switch store.status {
         case .success(let name, let url):
-            HStack(spacing: 6) {
+            statusLine {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
                 Text("Exported \(name)")
-                Button("Show in Finder") { revealInFinder(url) }
-                    .buttonStyle(.link)
+                Button("Show in Finder") { revealInFinder(url) }.buttonStyle(.link)
             }
-            .font(.system(size: 12))
         case .failure(let message):
-            Label(message, systemImage: "exclamationmark.triangle.fill")
-                .foregroundStyle(.red).font(.system(size: 12))
+            statusLine {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
+                Text(message)
+            }
         case .none:
             EmptyView()
         }
     }
 
-    private func metaRow(_ key: String, _ value: String) -> some View {
-        GridRow {
-            Text(key).foregroundStyle(.tertiary)
-            Text(value).textSelection(.enabled).foregroundStyle(.secondary)
-                .lineLimit(1).truncationMode(.middle)
+    private func statusLine<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        HStack(spacing: 6) { content() }
+            .font(.system(size: 12))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12).padding(.bottom, 8)
+    }
+
+    // MARK: - Preview
+
+    @ViewBuilder
+    private var preview: some View {
+        if let html = previewHTML {
+            HTMLPreview(html: html)
+        } else {
+            VStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Rendering preview…").font(.caption).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
+
+    private func loadPreview(_ summary: SessionSummary) async {
+        previewHTML = nil
+        let url = summary.fileURL
+        let html = await Task.detached(priority: .userInitiated) {
+            HTMLRenderer.previewHTML(fileURL: url, maxLines: previewLineCount)
+        }.value
+        previewHTML = html
+    }
+
+    // MARK: - Helpers
 
     private func projectLabel(_ path: String) -> String {
         let home = FileManager.default.homeDirectoryForCurrentUser.path

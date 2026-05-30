@@ -4,6 +4,14 @@ public enum HTMLRenderer {
     /// Max characters shown for a single tool input / result before truncation.
     static let maxBlockChars = 8000
 
+    /// Render a quick preview from the first `maxLines` lines of a session file.
+    public static func previewHTML(fileURL: URL, maxLines: Int) -> String? {
+        guard let session = try? SessionParser.parse(fileURL: fileURL, maxLines: maxLines) else {
+            return nil
+        }
+        return render(session: session)
+    }
+
     public static func render(session: ParsedSession, exportedAt: Date = Date()) -> String {
         let resultsByID = indexResults(session.entries)
         // Tool ids that a tool_use will render: their result is embedded there
